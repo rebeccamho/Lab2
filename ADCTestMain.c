@@ -29,18 +29,10 @@
 #include "ADCSWTrigger.h"
 #include "../ValvanoWareTM4C123/ValvanoWareTM4C123/inc/tm4c123gh6pm.h"
 #include "PLL.h"
+#include <stdbool.h>
 
 #define PF2             (*((volatile uint32_t *)0x40025010))
 #define PF1             (*((volatile uint32_t *)0x40025008))
-	
-static const int size = 1000;
-uint32_t TimeBuf[size];
-uint32_t ADCBuf[size];
-uint32_t TimeDiffBuf[size-1];
-uint32_t bufIndex = 0;
-uint32_t MaxTimeDiff = 0;
-uint32_t MinTimeDiff = 0xFFFFFFFF;
-uint32_t Jitter;
 
 void processTimeData(void);		// Find min and max time differences and jitter
 
@@ -51,6 +43,33 @@ void EndCritical(long sr);    // restore I bit to previous value
 void WaitForInterrupt(void);  // low power mode
 
 volatile uint32_t ADCvalue;
+
+struct ADCvalueCount {
+	uint32_t value;
+	uint32_t numOccur;
+};
+typedef struct ADCvalueCount ADCvalueCount;
+
+static const int size = 1000;
+uint32_t bufIndex = 0;
+uint32_t MaxTimeDiff = 0;
+uint32_t MinTimeDiff = 0xFFFFFFFF;
+uint32_t Jitter;
+uint32_t TimeBuf[size];
+uint32_t ADCBuf[size];
+uint32_t TimeDiffBuf[size-1];
+ADCvalueCount ADCvalueList[size];
+uint32_t ListSize = 0;
+
+// This function initializes all values and counts in the 
+// struct of measured ADC values to 0.
+void ADCstructInit() {
+	for(int i = 0; i < size; i++) {
+		ADCvalueList[i].numOccur = 0;
+		ADCvalueList[i].value = 0;
+	}
+}
+
 // This debug function initializes Timer0A to request interrupts
 // at a 100 Hz frequency.  It is similar to FreqMeasure.c.
 void Timer0A_Init100HzInt(void){
@@ -116,8 +135,9 @@ int main(void){
                                         // configure PF2 as GPIO
   GPIO_PORTF_PCTL_R = (GPIO_PORTF_PCTL_R&0xFFFFF00F)+0x00000000;
   GPIO_PORTF_AMSEL_R = 0;               // disable analog functionality on PF
-  PF2 = 0;                      // turn off LED
-  EnableInterrupts();
+  PF2 = 0;                  				    // turn off LED
+  ADCstructInit();											// initialize counts of ADC values
+	EnableInterrupts();
   while(1){
     PF1 ^= 0x02;  // toggles when running in main
 		if(bufIndex == size) {
@@ -126,6 +146,7 @@ int main(void){
   }
 	processTimeData();
 }
+
 
 void processTimeData() {
 	for(int i = 0; i < size - 3; i++) { // to convert time values to sec, need to divide by 80e6
@@ -141,5 +162,20 @@ void processTimeData() {
 }
 
 void createPMF() {
-
+	for(int i = 0; i < size; i++) {
+		uint32_t val = ADCBuf[i];
+		bool found = false;
+		for(int j = 0; j < ListSize; j++) {
+			if(ADCvalueList[j].value == val) { // value already entered
+				ADCvalueList[j].numOccur++;
+				found = true;
+				break;
+			}
+		}
+		if(!found) { // value not yet entered
+			ADCvalueList[ListSize].value = val;
+			ADCvalueList[ListSize].numOccur = 1;
+			ListSize++;
+		}
+	}
 }
