@@ -32,6 +32,18 @@
 
 #define PF2             (*((volatile uint32_t *)0x40025010))
 #define PF1             (*((volatile uint32_t *)0x40025008))
+	
+static const int size = 1000;
+uint32_t TimeBuf[size];
+uint32_t ADCBuf[size];
+uint32_t TimeDiffBuf[size-1];
+uint32_t bufIndex = 0;
+uint32_t MaxTimeDiff = 0;
+uint32_t MinTimeDiff = 0xFFFFFFFF;
+uint32_t Jitter;
+
+void processTimeData(void);		// Find min and max time differences and jitter
+
 void DisableInterrupts(void); // Disable interrupts
 void EnableInterrupts(void);  // Enable interrupts
 long StartCritical (void);    // previous I bit, disable interrupts
@@ -61,11 +73,35 @@ void Timer0A_Init100HzInt(void){
   NVIC_PRI4_R = (NVIC_PRI4_R&0x00FFFFFF)|0x40000000; // top 3 bits
   NVIC_EN0_R = 1<<19;              // enable interrupt 19 in NVIC
 }
+
+void Timer1A_Init80MHzInt(void) {
+	volatile uint32_t delay;
+  SYSCTL_RCGCTIMER_R |= 0x02;   // 0) activate TIMER1
+  //PeriodicTask = task;          // user function
+  TIMER1_CTL_R = 0x00000000;    // 1) disable TIMER1A during setup
+  TIMER1_CFG_R = 0x00000000;    // 2) configure for 32-bit mode
+  TIMER1_TAMR_R = 0x00000002;   // 3) configure for periodic mode, default down-count settings
+  TIMER1_TAILR_R = 0xFFFFFFFE;    // 4) reload value
+  TIMER1_TAPR_R = 0;            // 5) bus clock resolution
+  TIMER1_ICR_R = 0x00000001;    // 6) clear TIMER1A timeout flag
+//  TIMER1_IMR_R = 0x00000001;    // 7) arm timeout interrupt
+//  NVIC_PRI5_R = (NVIC_PRI5_R&0xFFFF00FF)|0x00008000; // 8) priority 4
+// interrupts enabled in the main program after all devices initialized
+// vector number 37, interrupt number 21
+//  NVIC_EN0_R = 1<<21;           // 9) enable IRQ 21 in NVIC
+  TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A
+}
+
 void Timer0A_Handler(void){
   TIMER0_ICR_R = TIMER_ICR_TATOCINT;    // acknowledge timer0A timeout
   PF2 ^= 0x04;                   // profile
   PF2 ^= 0x04;                   // profile
   ADCvalue = ADC0_InSeq3();
+	if(bufIndex < size) {
+		TimeBuf[bufIndex] = TIMER1_TAR_R;		// add current time to time dump
+		ADCBuf[bufIndex] = ADCvalue;		// add current ADC value to ADC dump
+		bufIndex++;
+	}
   PF2 ^= 0x04;                   // profile
 }
 int main(void){
@@ -73,6 +109,7 @@ int main(void){
   SYSCTL_RCGCGPIO_R |= 0x20;            // activate port F
   ADC0_InitSWTriggerSeq3_Ch9();         // allow time to finish activating
   Timer0A_Init100HzInt();               // set up Timer0A for 100 Hz interrupts
+	Timer1A_Init80MHzInt();								// set up Timer1A for couting every 12.5ns
   GPIO_PORTF_DIR_R |= 0x06;             // make PF2, PF1 out (built-in LED)
   GPIO_PORTF_AFSEL_R &= ~0x06;          // disable alt funct on PF2, PF1
   GPIO_PORTF_DEN_R |= 0x06;             // enable digital I/O on PF2, PF1
@@ -83,7 +120,26 @@ int main(void){
   EnableInterrupts();
   while(1){
     PF1 ^= 0x02;  // toggles when running in main
+		if(bufIndex == size) {
+			break;
+		}
   }
+	processTimeData();
 }
 
+void processTimeData() {
+	for(int i = 0; i < size - 3; i++) { // to convert time values to sec, need to divide by 80e6
+		uint32_t time_diff = TimeBuf[i] - TimeBuf[i+1];
+		if(time_diff > MaxTimeDiff) {
+			MaxTimeDiff = time_diff;
+		} else if(time_diff < MinTimeDiff) {
+			MinTimeDiff = time_diff;
+		}
+		TimeDiffBuf[i] = time_diff;
+	}
+	Jitter = MaxTimeDiff - MinTimeDiff;
+}
 
+void createPMF() {
+
+}
