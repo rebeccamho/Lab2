@@ -25,19 +25,22 @@
 // center of X-ohm potentiometer connected to PE3/AIN0
 // bottom of X-ohm potentiometer connected to ground
 // top of X-ohm potentiometer connected to +3.3V 
+
 #include <stdint.h>
 #include "ADCSWTrigger.h"
 #include "../ValvanoWareTM4C123/ValvanoWareTM4C123/inc/tm4c123gh6pm.h"
 #include "../ValvanoWareTM4C123/ValvanoWareTM4C123/ST7735_4C123/ST7735.c"
 #include "../Lab1/fixed.c"
-
 #include "PLL.h"
 #include <stdbool.h>
 
 #define PF2             (*((volatile uint32_t *)0x40025010))
 #define PF1             (*((volatile uint32_t *)0x40025008))
+	
 
 void processTimeData(void);		// Find min and max time differences and jitter
+void createPMF(void);					// Plot a PMF of the sampled ADC data
+void outputNumber(uint32_t);
 
 void DisableInterrupts(void); // Disable interrupts
 void EnableInterrupts(void);  // Enable interrupts
@@ -53,7 +56,8 @@ struct ADCvalueCount {
 };
 typedef struct ADCvalueCount ADCvalueCount;
 
-static const int size = 1000;
+const char NewLine = 10;
+static const int size = 100;
 uint32_t bufIndex = 0;
 uint32_t MaxTimeDiff = 0;
 uint32_t MinTimeDiff = 0xFFFFFFFF;
@@ -63,6 +67,8 @@ uint32_t ADCBuf[size];
 uint32_t TimeDiffBuf[size-1];
 ADCvalueCount ADCvalueList[size];
 uint32_t ListSize = 0;
+uint32_t min_ADC;
+uint32_t max_ADC;
 
 // This function initializes all values and counts in the 
 // struct of measured ADC values to 0.
@@ -128,6 +134,7 @@ void Timer0A_Handler(void){
 }
 int main(void){
   PLL_Init(Bus80MHz);                   // 80 MHz
+	Output_Init();
   SYSCTL_RCGCGPIO_R |= 0x20;            // activate port F
   ADC0_InitSWTriggerSeq3_Ch9();         // allow time to finish activating
   Timer0A_Init100HzInt();               // set up Timer0A for 100 Hz interrupts
@@ -148,6 +155,7 @@ int main(void){
 		}
   }
 	processTimeData();
+	createPMF();
 }
 
 
@@ -165,8 +173,8 @@ void processTimeData() {
 }
 
 void createPMF() {
-	uint32_t min_ADC = ADCBuf[0];
-	uint32_t max_ADC = ADCBuf[0];
+	min_ADC = ADCBuf[0];
+	max_ADC = ADCBuf[0];
 	uint32_t max_occur = 0;
 	
 	for(int i = 0; i < size; i++) {
@@ -190,10 +198,46 @@ void createPMF() {
 		}
 	}
 	
-	for(int i = 0; i < ListSize; i++) {
+	for(int i = 0; i < ListSize; i++) { // find the maximum number of occurences
 		if(ADCvalueList[i].numOccur > max_occur) { max_occur = ADCvalueList[i].numOccur; }
 	}
 	
-	char* title = "PMF";
-	ST7735_XYplotInit(title, min_ADC-10, max_ADC+10, 0, max_occur+10);
+	// plot the PMF
+	// x ranges from 0 to 127, height ranges from 0 to 127
+	ST7735_FillScreen(ST7735_BLACK); 
+  ST7735_SetCursor(0,0);
+	for(int i = 0; i < ListSize; i++) {
+		int16_t x = 127*(ADCvalueList[i].value - (min_ADC-20))/((max_ADC+20) - (min_ADC-20));
+		int16_t height = (127*ADCvalueList[i].numOccur)/max_occur; 
+		int16_t y = 158 - height; // y in DrawFastVLine is num of rows from top, lines grow downward
+		ST7735_DrawFastVLine(x, y, height, ST7735_YELLOW);
+	}
+
+	ST7735_SetCursor(1,1);
+	ST7735_OutString("Min ADC: ");
+	outputNumber(min_ADC);
+	ST7735_SetCursor(1,2);
+	ST7735_OutString("Max ADC: ");
+	outputNumber(max_ADC);
+}
+
+void outputNumber(uint32_t val) {
+	if(val > 9999) { // number is out of range
+			ST7735_OutChar('*');
+			for(int i = 0; i < 3; i++) {
+					ST7735_OutChar('*');
+			}
+			return;
+	}
+	uint32_t rem = val % 1000;
+	uint32_t thous = val / 1000; // thousands place
+	int32_t hund = rem / 100; // hundreds place
+	rem = rem % 100;
+	int32_t tens = rem / 10; // tens place
+	int32_t ones = rem % 10; // ones place
+		
+	ST7735_OutChar((char) thous+48);
+	ST7735_OutChar((char) hund+48);
+	ST7735_OutChar((char) tens+48);
+	ST7735_OutChar((char) ones+48);
 }
