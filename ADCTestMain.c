@@ -28,6 +28,9 @@
 #include <stdint.h>
 #include "ADCSWTrigger.h"
 #include "../ValvanoWareTM4C123/ValvanoWareTM4C123/inc/tm4c123gh6pm.h"
+#include "../ValvanoWareTM4C123/ValvanoWareTM4C123/ST7735_4C123/ST7735.c"
+#include "../Lab1/fixed.c"
+
 #include "PLL.h"
 #include <stdbool.h>
 
@@ -162,8 +165,16 @@ void processTimeData() {
 }
 
 void createPMF() {
+	uint32_t min_ADC = ADCBuf[0];
+	uint32_t max_ADC = ADCBuf[0];
+	uint32_t max_occur = 0;
+	
 	for(int i = 0; i < size; i++) {
 		uint32_t val = ADCBuf[i];
+		
+		if(val < min_ADC) { min_ADC = val; }	// new minimum ADC value found
+		else if (val > max_ADC) { max_ADC = val; }	// new maximum ADC value found
+		
 		bool found = false;
 		for(int j = 0; j < ListSize; j++) {
 			if(ADCvalueList[j].value == val) { // value already entered
@@ -178,4 +189,11 @@ void createPMF() {
 			ListSize++;
 		}
 	}
+	
+	for(int i = 0; i < ListSize; i++) {
+		if(ADCvalueList[i].numOccur > max_occur) { max_occur = ADCvalueList[i].numOccur; }
+	}
+	
+	char* title = "PMF";
+	ST7735_XYplotInit(title, min_ADC-10, max_ADC+10, 0, max_occur+10);
 }

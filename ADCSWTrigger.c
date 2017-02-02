@@ -73,6 +73,9 @@ void ADC0_InitSWTriggerSeq3_Ch9(void){
   ADC0_PC_R &= ~0xF;              // 7) clear max sample rate field
   ADC0_PC_R |= 0x1;               //    configure for 125K samples/sec
   ADC0_SSPRI_R = 0x0123;          // 8) Sequencer 3 is highest priority
+		
+	//ADC0_SAC_R = ADC_SAC	// CTRL+SPACE to see options
+		
   ADC0_ACTSS_R &= ~0x0008;        // 9) disable sample sequencer 3
   ADC0_EMUX_R &= ~0xF000;         // 10) seq3 is software trigger
   ADC0_SSMUX3_R &= ~0x000F;       // 11) clear SS3 field
