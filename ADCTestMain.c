@@ -207,7 +207,7 @@ void createPMF() {
 	ST7735_FillScreen(ST7735_BLACK); 
   ST7735_SetCursor(0,0);
 	for(int i = 0; i < ListSize; i++) {
-		int16_t x = 127*(ADCvalueList[i].value - (min_ADC-20))/((max_ADC+20) - (min_ADC-20));
+		int16_t x = 5 + 117*(ADCvalueList[i].value - min_ADC)/(max_ADC - min_ADC);
 		int16_t height = (127*ADCvalueList[i].numOccur)/max_occur; 
 		int16_t y = 158 - height; // y in DrawFastVLine is num of rows from top, lines grow downward
 		ST7735_DrawFastVLine(x, y, height, ST7735_YELLOW);
