@@ -36,11 +36,12 @@
 
 #define PF2             (*((volatile uint32_t *)0x40025010))
 #define PF1             (*((volatile uint32_t *)0x40025008))
-	
+#define PF4   (*((volatile uint32_t *)0x40025040))
 
-void processTimeData(void);		// Find min and max time differences and jitter
-void createPMF(void);					// Plot a PMF of the sampled ADC data
-void outputNumber(uint32_t);
+void ProcessTimeData(void);		// Find min and max time differences and jitter
+void CreatePMF(void);					// Plot a PMF of the sampled ADC data
+void DelayWait10ms(uint32_t);
+void ResetScreen(void);
 
 void DisableInterrupts(void); // Disable interrupts
 void EnableInterrupts(void);  // Enable interrupts
@@ -57,7 +58,7 @@ struct ADCvalueCount {
 typedef struct ADCvalueCount ADCvalueCount;
 
 const char NewLine = 10;
-static const int size = 100;
+static const int size = 1000;
 uint32_t bufIndex = 0;
 uint32_t MaxTimeDiff = 0;
 uint32_t MinTimeDiff = 0xFFFFFFFF;
@@ -69,6 +70,15 @@ ADCvalueCount ADCvalueList[size];
 uint32_t ListSize = 0;
 uint32_t min_ADC;
 uint32_t max_ADC;
+
+void Pause(void){
+  while(PF4==0x00){ 
+    DelayWait10ms(10);
+  }
+  while(PF4==0x10){
+    DelayWait10ms(10);
+  }
+}
 
 // This function initializes all values and counts in the 
 // struct of measured ADC values to 0.
@@ -148,18 +158,31 @@ int main(void){
   PF2 = 0;                  				    // turn off LED
   ADCstructInit();											// initialize counts of ADC values
 	EnableInterrupts();
+	/*
+	ST7735_FillScreen(ST7735_BLACK); 
+  ST7735_SetCursor(0,0);
+	ST7735_OutString("Sampling ADC");
   while(1){
     PF1 ^= 0x02;  // toggles when running in main
 		if(bufIndex == size) {
 			break;
 		}
   }
-	processTimeData();
-	createPMF();
+	ProcessTimeData();
+	CreatePMF();
+	*/
+	ResetScreen();
+	ST7735_Line(5, 5, 120, 120, ST7735_BLUE);
+	Pause();
+	ResetScreen();
+	ST7735_Line(5, 50, 5, 100, ST7735_BLUE);
+	Pause();
+	ResetScreen();
+	ST7735_Line(5, 110, 110, 10, ST7735_BLUE); 
 }
 
 
-void processTimeData() {
+void ProcessTimeData() {
 	for(int i = 0; i < size - 3; i++) { // to convert time values to sec, need to divide by 80e6
 		uint32_t time_diff = TimeBuf[i] - TimeBuf[i+1];
 		if(time_diff > MaxTimeDiff) {
@@ -172,7 +195,7 @@ void processTimeData() {
 	Jitter = MaxTimeDiff - MinTimeDiff;
 }
 
-void createPMF() {
+void CreatePMF() {
 	min_ADC = ADCBuf[0];
 	max_ADC = ADCBuf[0];
 	uint32_t max_occur = 0;
@@ -215,29 +238,27 @@ void createPMF() {
 
 	ST7735_SetCursor(1,1);
 	ST7735_OutString("Min ADC: ");
-	outputNumber(min_ADC);
+	ST7735_OutputNumber(min_ADC);
 	ST7735_SetCursor(1,2);
 	ST7735_OutString("Max ADC: ");
-	outputNumber(max_ADC);
+	ST7735_OutputNumber(max_ADC);
 }
 
-void outputNumber(uint32_t val) {
-	if(val > 9999) { // number is out of range
-			ST7735_OutChar('*');
-			for(int i = 0; i < 3; i++) {
-					ST7735_OutChar('*');
-			}
-			return;
-	}
-	uint32_t rem = val % 1000;
-	uint32_t thous = val / 1000; // thousands place
-	int32_t hund = rem / 100; // hundreds place
-	rem = rem % 100;
-	int32_t tens = rem / 10; // tens place
-	int32_t ones = rem % 10; // ones place
-		
-	ST7735_OutChar((char) thous+48);
-	ST7735_OutChar((char) hund+48);
-	ST7735_OutChar((char) tens+48);
-	ST7735_OutChar((char) ones+48);
+// Subroutine to wait 10 msec
+// Inputs: None
+// Outputs: None
+// Notes: ...
+void DelayWait10ms(uint32_t n){uint32_t volatile time;
+	while(n){
+    time = 727240*2/91;  // 10msec
+    while(time){
+	  	time--;
+    }
+    n--;
+  }
+}
+
+void ResetScreen() {
+	ST7735_FillScreen(ST7735_WHITE);
+	ST7735_SetCursor(0,0);	
 }
