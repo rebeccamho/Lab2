@@ -164,7 +164,6 @@ int main(void){
   PortF_Init();
   Timer0A_Init100HzInt();               // set up Timer0A for 100 Hz interrupts
 	Timer1A_Init80MHzInt();								// set up Timer1A for couting every 12.5ns
-  
   ADCstructInit();											// initialize counts of ADC values
 	EnableInterrupts();
 	
