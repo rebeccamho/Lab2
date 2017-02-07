@@ -42,6 +42,7 @@ void ProcessTimeData(void);		// Find min and max time differences and jitter
 void CreatePMF(void);					// Plot a PMF of the sampled ADC data
 void DelayWait10ms(uint32_t);
 void ResetScreen(void);
+void TestLines(void);
 
 void DisableInterrupts(void); // Disable interrupts
 void EnableInterrupts(void);  // Enable interrupts
@@ -87,6 +88,20 @@ void ADCstructInit() {
 		ADCvalueList[i].numOccur = 0;
 		ADCvalueList[i].value = 0;
 	}
+}
+
+void PortF_Init() {
+	SYSCTL_RCGCGPIO_R |= 0x20;            // activate port F
+  ADC0_InitSWTriggerSeq3_Ch9();         // allow time to finish activating
+	GPIO_PORTF_DIR_R |= 0x06;             // make PF2, PF1 out (built-in LED)
+  GPIO_PORTF_AFSEL_R &= ~0x16;          // disable alt funct on PF4, PF2, PF1
+  GPIO_PORTF_DEN_R |= 0x16;             // enable digital I/O on PF4, PF2, PF1
+                                        // configure PF2 as GPIO
+  GPIO_PORTF_PCTL_R = (GPIO_PORTF_PCTL_R&0xFFFFF00F)+0x00000000;
+  GPIO_PORTF_AMSEL_R = 0;               // disable analog functionality on PF
+	GPIO_PORTF_PUR_R |= 0x10;         // 5) pullup for PF4
+
+  PF2 = 0;                  				    // turn off LED
 }
 
 // This debug function initializes Timer0A to request interrupts
@@ -142,23 +157,17 @@ void Timer0A_Handler(void){
 	}
   PF2 ^= 0x04;                   // profile
 }
+
 int main(void){
   PLL_Init(Bus80MHz);                   // 80 MHz
 	Output_Init();
-  SYSCTL_RCGCGPIO_R |= 0x20;            // activate port F
-  ADC0_InitSWTriggerSeq3_Ch9();         // allow time to finish activating
+  PortF_Init();
   Timer0A_Init100HzInt();               // set up Timer0A for 100 Hz interrupts
 	Timer1A_Init80MHzInt();								// set up Timer1A for couting every 12.5ns
-  GPIO_PORTF_DIR_R |= 0x06;             // make PF2, PF1 out (built-in LED)
-  GPIO_PORTF_AFSEL_R &= ~0x06;          // disable alt funct on PF2, PF1
-  GPIO_PORTF_DEN_R |= 0x06;             // enable digital I/O on PF2, PF1
-                                        // configure PF2 as GPIO
-  GPIO_PORTF_PCTL_R = (GPIO_PORTF_PCTL_R&0xFFFFF00F)+0x00000000;
-  GPIO_PORTF_AMSEL_R = 0;               // disable analog functionality on PF
-  PF2 = 0;                  				    // turn off LED
+  
   ADCstructInit();											// initialize counts of ADC values
 	EnableInterrupts();
-	/*
+	
 	ST7735_FillScreen(ST7735_BLACK); 
   ST7735_SetCursor(0,0);
 	ST7735_OutString("Sampling ADC");
@@ -170,15 +179,8 @@ int main(void){
   }
 	ProcessTimeData();
 	CreatePMF();
-	*/
-	ResetScreen();
-	ST7735_Line(5, 5, 120, 120, ST7735_BLUE);
 	Pause();
-	ResetScreen();
-	ST7735_Line(5, 50, 5, 100, ST7735_BLUE);
-	Pause();
-	ResetScreen();
-	ST7735_Line(5, 110, 110, 10, ST7735_BLUE); 
+	TestLines();
 }
 
 
@@ -261,4 +263,24 @@ void DelayWait10ms(uint32_t n){uint32_t volatile time;
 void ResetScreen() {
 	ST7735_FillScreen(ST7735_WHITE);
 	ST7735_SetCursor(0,0);	
+}
+
+void TestLines() {
+	ResetScreen();
+	ST7735_Line(5, 5, 120, 120, ST7735_BLUE);
+	Pause();
+	ResetScreen();
+	ST7735_Line(5, 50, 5, 100, ST7735_BLUE);
+	Pause();
+	ResetScreen();
+	ST7735_Line(5, 110, 110, 10, ST7735_BLUE); 
+	Pause();
+	ResetScreen();
+	ST7735_Line(50, 150, 100, 5, ST7735_BLACK);
+	Pause();
+	ResetScreen();
+	ST7735_Line(50, 100, 50, 25, ST7735_BLUE);
+	Pause();
+	ResetScreen();
+	ST7735_Line(25, 50, 100, 50, ST7735_BLUE);
 }
